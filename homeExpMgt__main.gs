@@ -8,6 +8,7 @@ var TOP_CATEGORY = 3
 var TOP_SUB_ITEM_IN_CAT = 10
 var TOP_ITEM = 20
 var DEFAULT_EMPTY_SHEET_ROW = 35 + TOP_CATEGORY * (TOP_SUB_ITEM_IN_CAT + 4) + TOP_ITEM
+var PREFIX_SETTING = '設定'
 var SUFFIX_SUMMARY = '-summary'
 var SUFFIX_PASS = '-pass'
 var SUFFIX_ZHTW_COPY = '的副本'
@@ -43,6 +44,9 @@ function getCurMonth() {
 }
 function getCurYear() {
   return Utilities.formatDate(new Date(), TIME_ZONE, 'YYYY') // current year
+}
+function getToday() {
+  return Utilities.formatDate(new Date(), TIME_ZONE, 'YYYY-MM-dd')
 }
 function getReverseKeyMap(keyMap) {
   var res = {}
@@ -141,7 +145,8 @@ function createAllSummarySheets(spreadSheet) {
       sheetName !== getCategoryName() &&
       sheetName !== getCodeDescName() &&
       sheetName.indexOf(SUFFIX_PASS) === -1 &&
-      sheetName.indexOf(SUFFIX_ZHTW_COPY) === -1
+      sheetName.indexOf(SUFFIX_ZHTW_COPY) === -1 &&
+      sheetName.indexOf(PREFIX_SETTING) === -1
     ) {
       sheets.push(item)
     }
@@ -430,6 +435,22 @@ function createExpenseSheet(spreadSheet, sheetName) {
   }
   var options = { template: spreadSheet.getSheetByName(getTplName()) }
   var newSheet = spreadSheet.insertSheet(sheetName, 0, options)
+  newSheet.getRange(1, 1).setNote('')
+  fillDefaultDate(spreadSheet, newSheet) 
+}
+
+function fillDefaultDate(spreadSheet, newSheet) {
+  var schema = getTplSchema(spreadSheet, getTplName())
+  for (var row = 2; row <= newSheet.getLastRow(); row++) {
+    if (!newSheet.getRange(row, schema[ITEM]).getValue()) break
+    var day = parseInt(newSheet.getRange(row, schema[TIME]).getValue())
+    if (day && day >= 1 && day <= 31) {
+      var prefix = getToday().slice(0, 8)
+      newSheet.getRange(row, schema[TIME]).setValue(prefix + String(day))
+    } else {
+      newSheet.getRange(row, schema[TIME]).setValue(getToday())
+    }
+  }
 }
 
 function createEmptySheet(spreadSheet, sheetName, index) {
@@ -492,4 +513,50 @@ function getCollapseData(plainObjData, titleCol, valueCol, toArray) {
     return ary
   }
   return src
+}
+
+function getFirstCat(spreadSheet, categorySheetName) {
+  var categorySheet = spreadSheet.getSheetByName(categorySheetName)
+  if (categorySheet.getLastRow() >= 1)
+    return categorySheet.getRange(1, 1).getValue()
+  return ''
+}
+
+function onEdit(e){
+  var spreadSheet = SpreadsheetApp.getActiveSpreadsheet()
+  var range = e.range
+  var col = range.getColumn()
+  var schema = getTplSchema(spreadSheet, getTplName())
+  if (
+    col === schema[TIME] ||
+    col === schema[CATEGORY]
+  ) {
+    return
+  }
+  var sheet = spreadSheet.getActiveSheet()
+  var validSheetNames = {
+    '1': true,
+    '2': true,
+    '3': true,
+    '4': true,
+    '5': true,
+    '6': true,
+    '7': true,
+    '8': true,
+    '9': true,
+    '10': true,
+    '11': true,
+    '12': true,
+    '月範例': true,
+  }
+  if (!validSheetNames[sheet.getName()]) return
+  var row = range.getRow();
+  var timeRange = sheet.getRange(row, schema[TIME])
+  var categoryRange = sheet.getRange(row, schema[CATEGORY])
+  if (!timeRange.getValue()) {
+    timeRange.setValue(getToday())
+  }
+  if (!categoryRange.getValue()) {
+    categoryRange.setValue(getFirstCat(spreadSheet, getCategoryName()))
+  }
 }
